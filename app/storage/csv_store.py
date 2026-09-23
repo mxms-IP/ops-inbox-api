@@ -27,11 +27,12 @@ def read_all_tickets() -> list[TicketOut]:
     Read data/tickets.csv back into a list of TicketOut objects.
     If the file doesn't exist, return an empty list.
     """
-    if (os.path.DATA_PATH):
-        tickets = pd.read_csv(DATA_PATH)
-    else:
+    
+    if not DATA_PATH.exists():
         return []
-
-    return tickets.tolist()
-
+        
+    df = pd.read_csv(DATA_PATH)
+    
+    
+    return [TicketOut(**row) for row in df.to_dict(orient="records")]
 

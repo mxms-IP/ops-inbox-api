@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, status
 from app.models.schema import TicketIn, WebhookAck, TicketOut
 from app.classification import classifier
-from app.storage.csv_store import append_ticket
+from app.storage import save_ticket
 
 router = APIRouter()
 
@@ -20,11 +20,11 @@ def process_ticket(ticket_id: str, ticket: TicketIn):
         category=category["category"], 
         confidence=category["confidence"], 
         entities=entities, 
-        status="sent", 
+        status="pending", 
         received_at=received_at
     )
 
-    append_ticket(ticket_data)
+    save_ticket(ticket_data)
     pass
 
 

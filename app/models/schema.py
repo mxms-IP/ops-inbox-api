@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from datetime import datetime
 from typing import Literal
 
@@ -8,7 +8,8 @@ class TicketIn(BaseModel):
     subject: str
     body: str
 
-class TicketOut(BaseModel): 
+class TicketOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True) 
     ticket_id: str
     sender: str
     subject: str
