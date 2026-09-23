@@ -36,8 +36,19 @@ def save_ticket(ticket: TicketOut) -> None:
 
         session.commit()
 
+    pass
+
+def update_status(old_ticket_id: str, status: str):
+
+    if (get_ticket(old_ticket_id) is not None):
+        with SessionLocal() as session:
+            ticket= session.execute(select(TicketORM).filter_by(ticket_id = old_ticket_id)).scalar_one()
+            ticket.status = status
+
+            session.commit()
 
     pass
+
 
 def get_all_tickets() -> list[TicketOut]:
     """

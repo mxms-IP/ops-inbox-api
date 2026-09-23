@@ -3,6 +3,7 @@ from app.api.webhook import router as webhook_router
 from app.storage import init_db,get_all_tickets
 from contextlib import asynccontextmanager
 from app.api.tickets import router as tickets_router
+from app.drafts.drafts import router as generator_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(webhook_router)
 app.include_router(tickets_router)
+app.include_router(generator_router)
 
 
 @app.get("/health")
