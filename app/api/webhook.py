@@ -1,5 +1,4 @@
-from datetime import datetime, date
-import time
+from datetime import datetime
 from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, status
 from app.models.schema import TicketIn, WebhookAck, TicketOut

@@ -35,13 +35,13 @@ def approve_draft(ticket_id: str):
     overwrites the existing row), and return a confirmation payload.
     """
 
-    try:
-        ticket= get_ticket(ticket_id)
-    except None:
-        raise HTTPException(404)
+    
+    ticket= get_ticket(ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
 
     ticket.status= "sent"
-    update_status(ticket_id,"sent")
+    save_ticket(ticket)
 
     return ticket
     pass

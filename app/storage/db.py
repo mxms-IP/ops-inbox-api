@@ -32,12 +32,14 @@ def save_ticket(ticket: TicketOut) -> None:
 
         row= TicketORM(**ticket.model_dump())
 
-        session.add(row)
+        session.merge(row)
 
         session.commit()
 
     pass
 
+
+## we dont need it right now, we just added session.merge in save function that checks if primary id exists or not and if it does saves it in that existing row
 def update_status(old_ticket_id: str, status: str):
 
     if (get_ticket(old_ticket_id) is not None):
