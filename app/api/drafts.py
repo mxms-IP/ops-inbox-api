@@ -18,9 +18,8 @@ def list_pending_drafts():
     list_of_tickets=[]
     
     for ticket in pending_tickets:
-        draft= generate_draft(ticket)
+        
         ticket= ticket.model_dump()
-        ticket["draft"]= draft
         list_of_tickets.append(ticket)
 
     return list_of_tickets
@@ -34,7 +33,6 @@ def approve_draft(ticket_id: str):
     with sqlite acts as an upsert on primary key — same ticket_id
     overwrites the existing row), and return a confirmation payload.
     """
-
     
     ticket= get_ticket(ticket_id)
     if ticket is None:

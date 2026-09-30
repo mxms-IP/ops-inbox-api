@@ -15,6 +15,7 @@ class TicketORM(Base):
     confidence = Column(Float)
     entities = Column(JSON)
     status = Column(String)
+    draft = Column(String)
     received_at = Column(DateTime)
 
 def init_db() -> None:

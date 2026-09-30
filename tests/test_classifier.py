@@ -1,19 +1,19 @@
-from app.classification.classifier import classify, extract_entities
+from app.classification.classifier import classify_rule_based, extract_entities
 
 def test_urgent_classification():
-    result = classify("Site is down!!", "This is critical, ASAP fix needed")
+    result = classify_rule_based("Site is down!!", "This is critical, ASAP fix needed")
     assert result["category"] == "urgent"
 
 def test_billing_classification():
-    result = classify("Invoice question", "Can I get a refund on my last charge?")
+    result = classify_rule_based("Invoice question", "Can I get a refund on my last charge?")
     assert result["category"] == "billing"
 
 def test_support_classification():
-    result = classify("How do I reset my password", "having an issue logging in")
+    result = classify_rule_based("How do I reset my password", "having an issue logging in")
     assert result["category"] == "support"
 
 def test_junk_classification():
-    result = classify("Hey", "just saying hi")
+    result = classify_rule_based("Hey", "just saying hi")
     assert result["category"] == "junk"
     assert result["confidence"] == 0.0
 

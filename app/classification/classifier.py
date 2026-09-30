@@ -1,8 +1,11 @@
 from collections import defaultdict
-
+import os
 from app.classification.rules import KEYWORD_RULES, COMPANY_DOMAIN_MAP, TICKET_ID_PATTERN
+from app.classification.llm_classifier import classify_llm
+from dotenv import load_dotenv
 
-def classify(subject: str, body: str) -> dict[str, float]:
+load_dotenv()
+def classify_rule_based(subject: str, body: str) -> dict[str, float]:
     """
     Score each category by counting how many of its keywords appear
     (case-insensitive) in `subject + " " + body`.
@@ -45,3 +48,27 @@ def extract_entities(sender: str, subject: str, body: str) -> dict:
     ticket_ref = match.group() if match else None
 
     return {"company": company, "ticket_ref": ticket_ref}
+
+def classify(subject: str, body: str) -> dict:
+    """
+    Read CLASSIFIER_BACKEND from the environment (default "rule").
+    If it's "llm": try classify_llm(subject, body).
+    If that raises ANY exception, log a warning (just print() is fine
+    for now) with the exception message, then fall back to
+    classify_rule_based(subject, body) instead of letting it crash.
+    If CLASSIFIER_BACKEND is "rule" (or anything else/unset),
+    just call classify_rule_based directly.
+    """
+    classifier=os.environ.get("CLASSIFIER_BACKEND")
+
+    if classifier == "llm":
+        try:
+            response = classify_llm(subject,body)
+        except Exception as e:
+            print(f"There was an error reaching LLM {e}")
+            response = classify_rule_based(subject,body)
+
+    else:
+        response = classify_rule_based(subject,body)
+
+    return response

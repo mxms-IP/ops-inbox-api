@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, EmailStr
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 
 class TicketIn(BaseModel):
@@ -17,6 +17,7 @@ class TicketOut(BaseModel):
     confidence: float
     entities: dict
     status: Literal["pending", "sent"]
+    draft: Optional[str] = None
     received_at: datetime
 
 class WebhookAck(BaseModel):
