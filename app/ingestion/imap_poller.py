@@ -8,7 +8,7 @@ load_dotenv()
 
 
 
-def fetch_unread_emails() -> list[TicketIn]:
+def fetch_unread_emails() -> tuple[list[TicketIn], int]:
     """
     Connect, select inbox, search UNSEEN.
     For each unread message: parse sender/subject/body (reuse the
@@ -20,6 +20,7 @@ def fetch_unread_emails() -> list[TicketIn]:
     """
 
     tickets=[]
+    skipped= 0
 
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(os.environ.get("GMAIL_ADDRESS"),os.environ.get("GMAIL_APP_PASSWORD"))
@@ -50,7 +51,7 @@ def fetch_unread_emails() -> list[TicketIn]:
 
 
         else:
-            body=part.get_payload(decode=True).decode(errors="replace")
+            body=message_text.get_payload(decode=True).decode(errors="replace")
 
 
         try:
@@ -62,11 +63,14 @@ def fetch_unread_emails() -> list[TicketIn]:
             )
 
             tickets.append(ticket)
+
+            mail.store(id, '+FLAGS', '\\Seen')
         except Exception as e:
             print(f"There was an error parsing this email. Please try again {e}" )
+            skipped+= 1
 
         
 
     mail.logout()
         
-    return tickets
+    return [tickets, skipped]

@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from app.models.schema import TicketOut
 from app.storage import get_all_tickets, get_ticket, save_ticket,update_status
 from app.drafts.generator import generate_draft
+from app.email_sender import send_email
+
 
 router = APIRouter()
 
@@ -38,8 +40,20 @@ def approve_draft(ticket_id: str):
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
-    ticket.status= "sent"
-    save_ticket(ticket)
+    try:
+        send_email(to= ticket.sender, subject=ticket.subject, body= ticket.draft)
+        ticket.status= "sent"
+    
+    except Exception as e:
+        print(f"There was an error sending this response: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to send email: {e}")
 
+    try:
+        ticket.status = "sent"
+        save_ticket(ticket)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Email was sent successfully, but updating the ticket's status failed: {e}. "
+        )
     return ticket
-    pass
