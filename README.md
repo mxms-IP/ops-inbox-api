@@ -14,7 +14,8 @@ cp .env.example .env   # fill in real values
 uvicorn app.main:app --reload
 ```
 
-Docker image is written but not build-tested locally (no disk space for Docker on the dev machine) — validate via CI or another machine before trusting it.
+
+
 
 ## API
 
@@ -37,25 +38,21 @@ curl -X POST http://127.0.0.1:8000/api/v1/inbox/webhook \
 
 ## Flow
 
-webhook JSON **or** a real inbound email → validate → classify → extract entities → draft a reply → store → human reviews → approve → real email sent, *then* marked sent.
+  webhook JSON **or** a real inbound email → validate → classify → extract entities → draft a reply → store → human reviews → approve → real email sent, *then* marked sent.
 
 ## Decisions worth knowing about
 
 **Webhook responds in milliseconds, work happens after.** `BackgroundTasks` does the classifying/storing/drafting *after* the `202` goes out. Proved this matters with a real concurrency test — a blocking call left inside the route body freezes every other request, not just its own.
 
-**Two things are swappable by design.** Storage went CSV → SQLite with a one-line import change and zero edits anywhere else. Classification works the same way: an LLM call with a hard-coded fallback to keyword matching on any failure — bad JSON, timeout, network error, doesn't matter. `csv_store.py` is still in the repo, unused, as proof the seam actually works.
-
 **Rules by default, LLM as upgrade.** Free, instant, zero external dependency to function at all. The LLM path is demonstrably better on messy real text, but it's a bonus, not a requirement — see the comparison below.
 
 **Real inbox via IMAP polling, not Gmail Pub/Sub push.** Push notifications need a verified domain and a public HTTPS endpoint — real infra, not really a FastAPI lesson. Polling still means real auth against a live mail server and real MIME parsing (multipart, encoded headers, a deliberately malformed sender injected via IMAP `APPEND` to prove one bad email doesn't kill a batch).
 
-**Send before marking sent, not after.** If it marked "sent" first and the email failed, the ticket would lie. Trade-off: a DB write failing *after* a successful send leaves it stuck "pending" — a human could resend it by accident. Flagged as a distinct `500` with a do-not-retry warning rather than hidden. A real fix needs an outbox pattern; out of scope here, but named instead of ignored.
-
 **Background task failures are logged, not recovered.** Once the `202` ships there's no response left to carry a later failure back — it's caught and printed, and the ticket is lost. Production version: a retry queue, not a print statement.
 
-**No DB migrations.** `create_all()` only makes new tables, never alters old ones — adding the `draft` column meant wiping the dev DB. Alembic is the real answer; skipped here deliberately.
 
-## Known gaps, named on purpose
+
+## Known gaps
 
 - Approve-and-send isn't fully atomic (see above)
 - Lost background-task failures aren't recoverable, just logged
