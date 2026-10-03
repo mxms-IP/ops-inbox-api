@@ -1,12 +1,18 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from app.ingestion.imap_poller import fetch_unread_emails
 from app.api.webhook import process_ticket
 import uuid
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+
+limiter= Limiter(key_func=get_remote_address)
 
 router = APIRouter()
 
 @router.post("/api/v1/ingest/poll-now")
-def poll_now():
+@limiter.limit("5/minutes")
+def poll_now(request: Request):
     ticket_list, skipped_parsing = fetch_unread_emails()
     succeeded = 0
     failed = 0

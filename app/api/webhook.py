@@ -1,10 +1,14 @@
 from datetime import datetime
 from uuid import uuid4
-from fastapi import APIRouter, BackgroundTasks, status
+from fastapi import APIRouter, BackgroundTasks, Request, status
 from app.models.schema import TicketIn, WebhookAck, TicketOut
 from app.classification import classifier
 from app.storage import save_ticket
 from app.drafts.generator import generate_draft
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
 
@@ -39,7 +43,8 @@ def process_ticket(ticket_id: str, ticket: TicketIn):
     response_model=WebhookAck,
     status_code=status.HTTP_202_ACCEPTED,
 )
-def receive_webhook(ticket: TicketIn, background_tasks: BackgroundTasks):
+@limiter.limit("5/minute")
+def receive_webhook(request: Request,ticket: TicketIn, background_tasks: BackgroundTasks):
     ticket_id = str(uuid4())
     background_tasks.add_task(process_ticket,ticket_id,ticket)
     return WebhookAck(ticket_id=ticket_id, status="queued")

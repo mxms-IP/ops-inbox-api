@@ -57,3 +57,5 @@ def approve_draft(ticket_id: str):
             detail=f"Email was sent successfully, but updating the ticket's status failed: {e}. "
         )
     return ticket
+
+

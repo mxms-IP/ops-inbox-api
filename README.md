@@ -2,13 +2,7 @@
 
 A FastAPI service that ingests support tickets (via webhook or a real Gmail
 inbox), classifies them, generates draft replies, and routes them through a
-human-approval step before sending. Built as a hands-on FastAPI/automation
-project, every component was written from a spec, debugged against
-real failures.
-Classification is rule-based by default, with an optional LLM-backed
-classifier (Gemini-flash-lite-3.5) behind a swappable interface that falls back to the
-rule-based path on any failure, no AI/LLM dependency is required for the
-system to function.
+human-approval step before sending. 
 
 ## Running locally
 
