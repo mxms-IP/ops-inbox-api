@@ -1,142 +1,71 @@
 # OpsInboxAPI
 
-A FastAPI service that ingests support tickets (via webhook or a real Gmail
-inbox), classifies them, generates draft replies, and routes them through a
-human-approval step before sending. 
+An inbox that reads itself, figures out what each message needs, writes the first draft of a reply, and waits for a person to say go.
 
-## Running locally
+A FastAPI service that triages support tickets (webhook or a real Gmail inbox), classifies them, drafts a reply, and routes everything through a human approval step before anything gets sent. No AI/LLM dependency required, rule-based classification is the default and the system runs fully without it. An LLM backend (Gemini) is available as a swap-in upgrade with automatic fallback if it fails.
+
+## Quickstart
 
 ```bash
-git clone <repo-url>
-cd ops-inbox-api
-python -m venv venv
-source venv/bin/activate   # venv\Scripts\activate on Windows
+git clone <repo-url> && cd ops-inbox-api
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env       # fill in real values
+cp .env.example .env   # fill in real values
 uvicorn app.main:app --reload
 ```
 
-## Running via Docker
-
-```bash
-docker build -t opsinboxapi .
-docker run -p 8000:8000 --env-file .env opsinboxapi
-```
-
-## Environment variables
-
-See `.env.example`. Required: `OPS_INBOX_API_KEY` (auth), `GMAIL_ADDRESS` +
-`GMAIL_APP_PASSWORD` (IMAP ingestion + SMTP sending, via a Google App
-Password, not the account password). Optional: `GEMINI_API_KEY` +
-`CLASSIFIER_BACKEND=llm` (defaults to `rule` — the system works fully
-without any LLM key set).
+Docker image is written but not build-tested locally (no disk space for Docker on the dev machine) — validate via CI or another machine before trusting it.
 
 ## API
 
-All endpoints except `/health` require an `X-API-Key` header.
+All routes but `/health` need an `X-API-Key` header.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
 | GET | `/health` | liveness check |
-| POST | `/api/v1/inbox/webhook` | submit a ticket for triage (rate-limited, 5/min) |
-| POST | `/api/v1/ingest/poll-now` | manually trigger an IMAP poll of a real Gmail inbox |
-| GET | `/api/v1/tickets` | debug: list all stored tickets |
-| GET | `/api/v1/drafts/pending` | tickets awaiting approval, each with its stored draft |
-| POST | `/api/v1/drafts/{ticket_id}/approve` | send the draft to the original sender and mark it sent |
-
-### Example
+| POST | `/api/v1/inbox/webhook` | submit a ticket (rate-limited, 5/min) |
+| POST | `/api/v1/ingest/poll-now` | pull unread email from a real Gmail inbox |
+| GET | `/api/v1/tickets` | debug: list everything stored |
+| GET | `/api/v1/drafts/pending` | tickets waiting on a human, with their draft |
+| POST | `/api/v1/drafts/{ticket_id}/approve` | send the draft, mark it sent |
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/inbox/webhook \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: devkey" \
+  -H "X-API-Key: devkey" -H "Content-Type: application/json" \
   -d '{"sender":"a@b.com","subject":"Site is down","body":"critical, ASAP"}'
 ```
 
-## Architecture
+## Flow
 
-```
-inbound ticket (webhook JSON, or a real email via IMAP poll)
-        -> validate (Pydantic)
-        -> classify (rule-based, or LLM with automatic fallback)
-        -> extract entities (company, ticket reference)
-        -> generate draft reply (Jinja2 template, stored once at creation)
-        -> save (SQLite via SQLAlchemy)
-        -> surface to a human via GET /drafts/pending
-        -> human approves -> POST /approve
-        -> send real email via SMTP -> only then mark status "sent"
-```
+webhook JSON **or** a real inbound email → validate → classify → extract entities → draft a reply → store → human reviews → approve → real email sent, *then* marked sent.
 
-## Design notes
+## Decisions worth knowing about
 
-**Instant-ack + background processing.** The webhook returns `202` in
-milliseconds via `BackgroundTasks`, regardless of how long classification
-and storage take. A blocking call placed directly in the route body (instead
-of the background task) would freeze request handling for every caller, not
-just its own — verified directly during development with a controlled
-concurrency test (plain `def` routes run in a threadpool; a blocking call
-inside `async def` has no such cushion and serializes every request on the
-single event loop).
+**Webhook responds in milliseconds, work happens after.** `BackgroundTasks` does the classifying/storing/drafting *after* the `202` goes out. Proved this matters with a real concurrency test — a blocking call left inside the route body freezes every other request, not just its own.
 
-**Two swappable-backend seams, same pattern applied twice.** Storage started
-as flat CSV (`app/storage/csv_store.py`) and was swapped for SQLite/SQLAlchemy
-(`app/storage/db.py`) with zero changes to any caller — the swap is a single
-import line in `app/storage/__init__.py`. `csv_store.py` is kept in the repo,
-unused, as evidence the seam actually works. Classification follows the same
-shape: `classify()` is a dispatcher that calls an LLM-backed classifier and
-falls back to deterministic keyword matching on *any* failure (network error,
-timeout, malformed JSON from the model, out-of-range confidence value) —
-chosen specifically so the service never goes down because a third-party API
-did.
+**Two things are swappable by design.** Storage went CSV → SQLite with a one-line import change and zero edits anywhere else. Classification works the same way: an LLM call with a hard-coded fallback to keyword matching on any failure — bad JSON, timeout, network error, doesn't matter. `csv_store.py` is still in the repo, unused, as proof the seam actually works.
 
-**Why rule-based classification by default, not LLM-only.** Keyword matching
-is free, instant, and fully deterministic, appropriate as the default for a
-service that shouldn't have a hard external dependency to function at all.
-The LLM path is an enhancement, not a requirement, and is demonstrably more
-accurate on nuanced/real-world text (see the Gemini vs. rule-based comparison
-below). But it costs latency, money, and introduces a failure mode the
-system has to actively guard against, which is why the fallback exists rather
-than letting a classification request simply fail.
+**Rules by default, LLM as upgrade.** Free, instant, zero external dependency to function at all. The LLM path is demonstrably better on messy real text, but it's a bonus, not a requirement — see the comparison below.
 
-**Real email ingestion via IMAP polling, not Gmail API push (Pub/Sub).** A
-deliberate scope decision: push notifications require a verified domain,
-Google Cloud Pub/Sub setup, and a publicly reachable HTTPS endpoint, real
-infrastructure unrelated to the FastAPI/automation skills this project is
-meant to demonstrate. IMAP polling still authenticates against a live mail
-server and parses genuinely messy real-world MIME (multipart text/HTML,
-encoded headers, malformed senders) rather than synthetic JSON. Verified
-against real inbound email, including a deliberately malformed `From` header
-injected via IMAP `APPEND` to confirm one bad message doesn't take down a
-batch poll.
+**Real inbox via IMAP polling, not Gmail Pub/Sub push.** Push notifications need a verified domain and a public HTTPS endpoint — real infra, not really a FastAPI lesson. Polling still means real auth against a live mail server and real MIME parsing (multipart, encoded headers, a deliberately malformed sender injected via IMAP `APPEND` to prove one bad email doesn't kill a batch).
 
-**Rate limiting on the webhook specifically, keyed by IP.** Capped at
-5/minute to stay well under Gemini's free-tier ceiling (~15 req/min) and to
-protect against retry storms. IP-based keying was chosen for simplicity;
-an API-key-based key function would be more correct for an authenticated
-API (two legitimate callers behind the same IP shouldn't throttle each
-other) and is a natural next improvement.
+**Send before marking sent, not after.** If it marked "sent" first and the email failed, the ticket would lie. Trade-off: a DB write failing *after* a successful send leaves it stuck "pending" — a human could resend it by accident. Flagged as a distinct `500` with a do-not-retry warning rather than hidden. A real fix needs an outbox pattern; out of scope here, but named instead of ignored.
 
-**No DB migrations (Alembic).** `init_db()` uses SQLAlchemy's `create_all`,
-which creates missing tables but never alters existing ones — adding the
-`draft` column during development required dropping the dev database
-entirely. Acceptable for a project at this stage; a real production system
-would use Alembic so schema changes don't require data loss.
+**Background task failures are logged, not recovered.** Once the `202` ships there's no response left to carry a later failure back — it's caught and printed, and the ticket is lost. Production version: a retry queue, not a print statement.
 
-## Known limitations
+**No DB migrations.** `create_all()` only makes new tables, never alters old ones — adding the `draft` column meant wiping the dev DB. Alembic is the real answer; skipped here deliberately.
 
-- `approve_draft` is not atomic across the send + persist steps (see above)
-- Background task failures in the webhook path are logged, not recovered
-- No DB migration tooling — schema changes currently require recreating the database
-- Rate limiting is IP-keyed, not API-key-keyed
-- `test_drafts.py` and full auth-edge-case coverage are not yet complete — see Tests
+## Known gaps, named on purpose
+
+- Approve-and-send isn't fully atomic (see above)
+- Lost background-task failures aren't recoverable, just logged
+- No migration tooling
+- Rate limit is per-IP, not per-API-key
+- `test_drafts.py` isn't written yet
 
 ## Tests
 
 ```bash
 pytest -v
 ```
-
-Classifier and webhook tests (status codes, response shape, the <1s instant-ack
-timing property, and auth rejection) are complete and passing. Draft/approval
-endpoint tests are not yet written.
 
