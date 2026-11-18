@@ -2,7 +2,7 @@
 
 An inbox that reads itself, figures out what each message needs, writes the first draft of a reply, and waits for a person to say go.
 
-A FastAPI service that triages support tickets (webhook or a real Gmail inbox), classifies them, drafts a reply, and routes everything through a human approval step before anything gets sent. No AI/LLM dependency required, rule-based classification is the default and the system runs fully without it. An LLM backend (Gemini) is available as a swap-in upgrade with automatic fallback if it fails.
+A FastAPI service that triages support tickets (webhook or a real Gmail inbox), classifies them, drafts a reply, and routes everything through a human approval step before anything gets sent. An LLM backend (Gemini) is available with automatic fallback to rule-based classification if it fails.
 
 ## Quickstart
 
@@ -65,4 +65,6 @@ curl -X POST http://127.0.0.1:8000/api/v1/inbox/webhook \
 ```bash
 pytest -v
 ```
+## Author
 
+**Rabia L.** ([mxms-IP](https://github.com/mxms-IP))
