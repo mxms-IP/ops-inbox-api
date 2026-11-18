@@ -58,7 +58,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/inbox/webhook \
 - Lost background-task failures aren't recoverable, just logged
 - No migration tooling
 - Rate limit is per-IP, not per-API-key
-- `test_drafts.py` isn't written yet
+
 
 ## Tests
 
