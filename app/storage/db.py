@@ -1,6 +1,10 @@
+import os
+
 from sqlalchemy import create_engine, Column, String, Float, DateTime, JSON, select
 from sqlalchemy.orm import declarative_base, sessionmaker
 from app.models.schema import TicketOut
+
+os.makedirs("data", exist_ok=True)
 
 engine = create_engine("sqlite:///data/tickets.db")
 SessionLocal = sessionmaker(bind=engine)
